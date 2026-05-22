@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, render_template_string
 import pandas as pd
+import io
 import os
 
 from sklearn.model_selection import train_test_split
@@ -14,77 +15,12 @@ from sklearn.metrics import accuracy_score
 app = Flask(__name__)
 
 # =====================================================
-# LOAD DATASET
+# GLOBAL VARIABLES
 # =====================================================
 
-try:
-
-    data = pd.read_csv("ai_vs_human_1200_dataset.csv")
-
-    # Ensure correct columns
-    data.columns = ["text", "label"]
-
-    # Remove null values
-    data = data.dropna()
-
-    # Convert label to integer
-    data["label"] = data["label"].astype(int)
-
-    print("Dataset Loaded Successfully")
-
-except Exception as e:
-
-    print("DATASET ERROR:", e)
-
-    # Empty fallback dataframe
-    data = pd.DataFrame({
-        "text": ["sample text"],
-        "label": [0]
-    })
-
-# =====================================================
-# TRAIN TEST SPLIT
-# =====================================================
-
-X_train, X_test, y_train, y_test = train_test_split(
-    data["text"],
-    data["label"],
-    test_size=0.2,
-    random_state=42
-)
-
-# =====================================================
-# TF-IDF VECTORIZER
-# =====================================================
-
-vectorizer = TfidfVectorizer(
-    stop_words="english",
-    ngram_range=(1, 2),
-    max_features=10000
-)
-
-X_train_vec = vectorizer.fit_transform(X_train)
-X_test_vec = vectorizer.transform(X_test)
-
-# =====================================================
-# MACHINE LEARNING MODEL
-# =====================================================
-
-model = LogisticRegression(
-    max_iter=1000
-)
-
-model.fit(X_train_vec, y_train)
-
-# =====================================================
-# ACCURACY
-# =====================================================
-
-prediction = model.predict(X_test_vec)
-
-accuracy = accuracy_score(y_test, prediction)
-
-print("MODEL ACCURACY:", round(accuracy * 100, 2), "%")
+model = None
+vectorizer = None
+accuracy = 0
 
 # =====================================================
 # HTML PAGE
@@ -135,46 +71,35 @@ z-index:-1;
 
 .container{
 width:90%;
-max-width:1100px;
+max-width:1200px;
 margin:auto;
 padding-top:40px;
 text-align:center;
 }
 
 h1{
-font-size:50px;
+font-size:55px;
 margin-bottom:20px;
 background:linear-gradient(to right,#00d4ff,#7c3aed);
 -webkit-background-clip:text;
 -webkit-text-fill-color:transparent;
 }
 
-.accuracy{
-display:inline-block;
-padding:15px 30px;
-background:rgba(255,255,255,0.1);
-border-radius:15px;
-margin-bottom:30px;
-}
-
-.main{
+.upload-box{
 background:rgba(255,255,255,0.08);
 padding:40px;
 border-radius:25px;
+margin-bottom:30px;
 backdrop-filter:blur(10px);
 }
 
-textarea{
+input[type=file]{
 width:100%;
-height:220px;
-border:none;
-outline:none;
-padding:20px;
-border-radius:20px;
-background:#0f172a;
+padding:18px;
+border-radius:15px;
+background:#111827;
 color:white;
-font-size:18px;
-resize:none;
+border:none;
 margin-bottom:20px;
 }
 
@@ -193,8 +118,23 @@ button:hover{
 transform:scale(1.05);
 }
 
+textarea{
+width:100%;
+height:220px;
+border:none;
+outline:none;
+padding:20px;
+border-radius:20px;
+background:#0f172a;
+color:white;
+font-size:18px;
+resize:none;
+margin-top:20px;
+margin-bottom:20px;
+}
+
 .result{
-margin-top:40px;
+margin-top:30px;
 background:rgba(255,255,255,0.08);
 padding:30px;
 border-radius:20px;
@@ -215,13 +155,10 @@ border-radius:20px;
 width:220px;
 }
 
-.card h3{
-margin-bottom:10px;
-}
-
 .card p{
 font-size:35px;
 font-weight:bold;
+margin-top:10px;
 }
 
 .chart{
@@ -229,6 +166,11 @@ margin-top:40px;
 background:rgba(255,255,255,0.08);
 padding:30px;
 border-radius:20px;
+}
+
+.status{
+margin-top:20px;
+font-size:20px;
 }
 
 </style>
@@ -243,11 +185,25 @@ border-radius:20px;
 
 <h1>AI Powered Human Text Detector</h1>
 
-<div class="accuracy">
-Model Accuracy : {{accuracy}}%
+<div class="upload-box">
+
+<h2>Upload Dataset CSV</h2>
+
+<input type="file" id="datasetFile">
+
+<button onclick="uploadDataset()">
+Train Model
+</button>
+
+<div class="status" id="trainStatus">
+No Dataset Uploaded
 </div>
 
-<div class="main">
+</div>
+
+<div class="upload-box">
+
+<h2>Paste Text For Detection</h2>
 
 <textarea id="textInput"
 placeholder="Paste AI or Human text here..."></textarea>
@@ -290,6 +246,39 @@ Waiting For Analysis...
 
 let chart;
 
+async function uploadDataset(){
+
+const fileInput =
+document.getElementById("datasetFile");
+
+const file = fileInput.files[0];
+
+if(!file){
+alert("Please upload CSV dataset");
+return;
+}
+
+const formData = new FormData();
+
+formData.append("file", file);
+
+document.getElementById("trainStatus").innerText =
+"Training Model...";
+
+const response = await fetch('/train',{
+
+method:'POST',
+body:formData
+
+});
+
+const data = await response.json();
+
+document.getElementById("trainStatus").innerText =
+data.message;
+
+}
+
 async function analyzeText(){
 
 const text =
@@ -305,11 +294,18 @@ const formData = new FormData();
 formData.append("text", text);
 
 const response = await fetch('/predict',{
+
 method:'POST',
 body:formData
+
 });
 
 const data = await response.json();
+
+if(data.error){
+alert(data.error);
+return;
+}
 
 document.getElementById("prediction").innerText =
 data.prediction;
@@ -368,33 +364,106 @@ responsive:true
 """
 
 # =====================================================
-# HOME ROUTE
+# HOME
 # =====================================================
 
 @app.route("/")
 def home():
 
-    return render_template_string(
-        HTML_PAGE,
-        accuracy=round(accuracy * 100, 2)
-    )
+    return render_template_string(HTML_PAGE)
 
 # =====================================================
-# PREDICT ROUTE
+# TRAIN MODEL
+# =====================================================
+
+@app.route("/train", methods=["POST"])
+def train():
+
+    global model
+    global vectorizer
+    global accuracy
+
+    if "file" not in request.files:
+
+        return jsonify({
+            "message": "Please Upload CSV File"
+        })
+
+    file = request.files["file"]
+
+    try:
+
+        # Read CSV
+        data = pd.read_csv(io.StringIO(
+            file.stream.read().decode("utf-8")
+        ))
+
+        # Ensure correct columns
+        data.columns = ["text", "label"]
+
+        # Clean
+        data = data.dropna()
+
+        # Split
+        X_train, X_test, y_train, y_test = train_test_split(
+            data["text"],
+            data["label"],
+            test_size=0.2,
+            random_state=42
+        )
+
+        # TF-IDF
+        vectorizer = TfidfVectorizer(
+            stop_words="english",
+            ngram_range=(1, 2),
+            max_features=10000
+        )
+
+        X_train_vec = vectorizer.fit_transform(X_train)
+        X_test_vec = vectorizer.transform(X_test)
+
+        # Model
+        model = LogisticRegression(
+            max_iter=1000
+        )
+
+        model.fit(X_train_vec, y_train)
+
+        # Accuracy
+        prediction = model.predict(X_test_vec)
+
+        accuracy = round(
+            accuracy_score(y_test, prediction) * 100,
+            2
+        )
+
+        return jsonify({
+            "message": f"Model Trained Successfully | Accuracy: {accuracy}%"
+        })
+
+    except Exception as e:
+
+        return jsonify({
+            "message": f"Error: {str(e)}"
+        })
+
+# =====================================================
+# PREDICT
 # =====================================================
 
 @app.route("/predict", methods=["POST"])
 def predict():
 
-    text = request.form.get("text")
+    global model
+    global vectorizer
 
-    if not text or text.strip() == "":
+    if model is None:
 
         return jsonify({
-            "prediction": "Please Enter Text",
-            "human_score": 0,
-            "ai_score": 0
+            "error": "Please Upload And Train Dataset First"
         })
+
+    text = request.form.get("text")
 
     vectorized_text = vectorizer.transform([text])
 
