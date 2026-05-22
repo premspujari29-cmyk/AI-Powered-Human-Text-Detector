@@ -1,14 +1,11 @@
 from flask import Flask, request, jsonify, render_template_string
 import pandas as pd
-import numpy as np
 import io
 import os
-import re
 
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import PassiveAggressiveClassifier
-from sklearn.naive_bayes import MultinomialNB
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 
 # =====================================================
@@ -21,31 +18,13 @@ app = Flask(__name__)
 # GLOBAL VARIABLES
 # =====================================================
 
-model1 = None
-model2 = None
+model = None
 vectorizer = None
-
 accuracy = 0
 
 human_count = 0
 ai_count = 0
 dataset_size = 0
-
-# =====================================================
-# TEXT CLEANING
-# =====================================================
-
-def clean_text(text):
-
-    text = str(text).lower()
-
-    text = re.sub(r"http\\S+", "", text)
-
-    text = re.sub(r"[^a-zA-Z0-9\\s]", "", text)
-
-    text = re.sub(r"\\s+", " ", text).strip()
-
-    return text
 
 # =====================================================
 # HTML PAGE
@@ -302,11 +281,12 @@ background:rgba(255,255,255,0.08);
 padding:30px;
 border-radius:25px;
 backdrop-filter:blur(10px);
+animation:floatCard 4s ease-in-out infinite;
 }
 
 .small-chart{
-width:300px;
-height:300px;
+width:320px;
+height:320px;
 margin:auto;
 }
 
@@ -322,10 +302,22 @@ padding:30px;
 border-radius:20px;
 backdrop-filter:blur(10px);
 transition:0.4s;
+position:relative;
+overflow:hidden;
+}
+
+.dataset-card::before{
+content:'';
+position:absolute;
+width:100%;
+height:5px;
+top:0;
+left:0;
+background:linear-gradient(to right,#06b6d4,#7c3aed);
 }
 
 .dataset-card:hover{
-transform:translateY(-8px);
+transform:translateY(-8px) scale(1.02);
 }
 
 .dataset-card p{
@@ -335,6 +327,18 @@ margin-top:12px;
 background:linear-gradient(to right,#06b6d4,#7c3aed);
 -webkit-background-clip:text;
 -webkit-text-fill-color:transparent;
+}
+
+@keyframes floatCard{
+0%{
+transform:translateY(0px);
+}
+50%{
+transform:translateY(-10px);
+}
+100%{
+transform:translateY(0px);
+}
 }
 
 .history-box{
@@ -364,8 +368,8 @@ grid-template-columns:1fr;
 }
 
 .small-chart{
-width:240px;
-height:240px;
+width:260px;
+height:260px;
 }
 
 }
@@ -391,7 +395,7 @@ height:240px;
 <input type="file" id="datasetFile">
 
 <button onclick="uploadDataset()">
-Train Advanced Model
+Train Model
 </button>
 
 <div class="status" id="trainStatus">
@@ -448,11 +452,6 @@ AI Purity Level
 <p id="aiScore">0%</p>
 </div>
 
-<div class="card">
-<h3>Confidence</h3>
-<p id="confidence">0%</p>
-</div>
-
 </div>
 
 <div class="stats">
@@ -468,13 +467,13 @@ AI Purity Level
 </div>
 
 <div class="stat-card">
-<h3>Diversity</h3>
-<p id="diversity">0</p>
+<h3>Sentences</h3>
+<p id="sentenceCount">0</p>
 </div>
 
 <div class="stat-card">
-<h3>Avg Word</h3>
-<p id="avgWord">0</p>
+<h3>Read Time</h3>
+<p id="readTime">0 Min</p>
 </div>
 
 </div>
@@ -649,15 +648,6 @@ data.human_score + "%";
 document.getElementById("aiScore").innerText =
 data.ai_score + "%";
 
-document.getElementById("confidence").innerText =
-data.confidence + "%";
-
-document.getElementById("diversity").innerText =
-data.lexical_diversity;
-
-document.getElementById("avgWord").innerText =
-data.avg_word_length;
-
 document.getElementById("purityBar").style.width =
 data.ai_score + "%";
 
@@ -665,12 +655,20 @@ updateChart(data.human_score, data.ai_score);
 
 const words = text.trim().split(/\\s+/).length;
 const chars = text.length;
+const sentences = text.split(/[.!?]+/).length - 1;
+const reading = Math.ceil(words / 200);
 
 document.getElementById("wordCount").innerText =
 words;
 
 document.getElementById("charCount").innerText =
 chars;
+
+document.getElementById("sentenceCount").innerText =
+sentences;
+
+document.getElementById("readTime").innerText =
+reading + " Min";
 
 const history =
 document.getElementById("historyList");
@@ -680,8 +678,8 @@ document.createElement("li");
 
 item.innerText =
 data.prediction +
-" | Confidence: " +
-data.confidence + "%";
+" | AI Score: " +
+data.ai_score + "%";
 
 history.prepend(item);
 
@@ -735,7 +733,11 @@ legend:{
 position:'bottom',
 
 labels:{
-color:'white'
+color:'white',
+padding:20,
+font:{
+size:15
+}
 }
 }
 
@@ -751,6 +753,18 @@ duration:2000
 });
 
 }
+
+document.getElementById("textInput")
+.addEventListener("input", function(){
+
+const text = this.value;
+
+const words = text.trim().split(/\\s+/).length;
+
+document.getElementById("wordCount").innerText =
+words;
+
+});
 
 </script>
 
@@ -774,8 +788,7 @@ def home():
 @app.route("/train", methods=["POST"])
 def train():
 
-    global model1
-    global model2
+    global model
     global vectorizer
     global accuracy
     global human_count
@@ -819,86 +832,43 @@ def train():
 
         data["label"] = data["label"].astype(int)
 
-        data["text"] = data["text"].apply(clean_text)
-
         human_count = len(data[data["label"] == 0])
         ai_count = len(data[data["label"] == 1])
         dataset_size = len(data)
 
         X_train, X_test, y_train, y_test = train_test_split(
-
             data["text"],
             data["label"],
-
             test_size=0.2,
-
-            random_state=42,
-
-            stratify=data["label"]
-
+            random_state=42
         )
 
         vectorizer = TfidfVectorizer(
-
             stop_words="english",
-
-            ngram_range=(1,3),
-
-            max_features=30000,
-
-            sublinear_tf=True,
-
-            min_df=2,
-
-            max_df=0.9
-
+            ngram_range=(1, 2),
+            max_features=10000
         )
 
         X_train_vec = vectorizer.fit_transform(X_train)
-
         X_test_vec = vectorizer.transform(X_test)
 
-        model1 = PassiveAggressiveClassifier(
-
-            max_iter=2000,
-
-            C=0.5,
-
-            random_state=42
-
+        model = LogisticRegression(
+            max_iter=1000
         )
 
-        model2 = MultinomialNB()
+        model.fit(X_train_vec, y_train)
 
-        model1.fit(X_train_vec, y_train)
-
-        model2.fit(X_train_vec, y_train)
-
-        pred1 = model1.predict(X_test_vec)
-
-        pred2 = model2.predict(X_test_vec)
-
-        final_pred = []
-
-        for p1, p2 in zip(pred1, pred2):
-
-            if p1 == p2:
-                final_pred.append(p1)
-            else:
-                final_pred.append(p1)
+        prediction = model.predict(X_test_vec)
 
         accuracy = round(
-
-            accuracy_score(y_test, final_pred) * 100,
-
+            accuracy_score(y_test, prediction) * 100,
             2
-
         )
 
         return jsonify({
 
             "message":
-            f"Advanced AI Model Trained | Accuracy: {accuracy}%",
+            f"Model Trained Successfully | Accuracy: {accuracy}%",
 
             "accuracy":accuracy,
 
@@ -923,11 +893,10 @@ def train():
 @app.route("/predict", methods=["POST"])
 def predict():
 
-    global model1
-    global model2
+    global model
     global vectorizer
 
-    if model1 is None:
+    if model is None:
 
         return jsonify({
             "error":
@@ -936,82 +905,24 @@ def predict():
 
     text = request.form.get("text")
 
-    cleaned_text = clean_text(text)
+    vectorized_text = vectorizer.transform([text])
 
-    vectorized_text = vectorizer.transform([cleaned_text])
+    prediction = model.predict(vectorized_text)[0]
 
-    pred1 = model1.predict(vectorized_text)[0]
+    probability = model.predict_proba(vectorized_text)[0]
 
-    pred2 = model2.predict(vectorized_text)[0]
+    human_score = round(probability[0] * 100, 2)
+    ai_score = round(probability[1] * 100, 2)
 
-    if pred1 == pred2:
-        prediction = pred1
+    if prediction == 0:
+        result = "Human Written Text"
     else:
-        prediction = pred1
-
-    score1 = model1.decision_function(vectorized_text)[0]
-
-    confidence = round(
-        min(abs(score1) * 15, 99),
-        2
-    )
-
-    if prediction == 1:
-
-        ai_score = confidence
-
-        human_score = round(100 - ai_score, 2)
-
         result = "AI Generated Text"
 
-    else:
-
-        human_score = confidence
-
-        ai_score = round(100 - human_score, 2)
-
-        result = "Human Written Text"
-
-    words = len(text.split())
-
-    chars = len(text)
-
-    avg_word_length = round(
-
-        np.mean([len(word) for word in text.split()]),
-
-        2
-
-    )
-
-    unique_words = len(set(text.split()))
-
-    lexical_diversity = round(
-
-        unique_words / max(words, 1),
-
-        2
-
-    )
-
     return jsonify({
-
         "prediction": result,
-
         "human_score": human_score,
-
-        "ai_score": ai_score,
-
-        "confidence": confidence,
-
-        "words": words,
-
-        "characters": chars,
-
-        "avg_word_length": avg_word_length,
-
-        "lexical_diversity": lexical_diversity
-
+        "ai_score": ai_score
     })
 
 # =====================================================
