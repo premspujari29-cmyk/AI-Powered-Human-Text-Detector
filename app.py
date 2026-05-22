@@ -33,7 +33,7 @@ HTML_PAGE = """
 
 <head>
 
-<title>AI Text Detector</title>
+<title>AI Powered Human Text Detector</title>
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -65,8 +65,12 @@ z-index:-1;
 }
 
 @keyframes bgMove{
-0%{background-position:left;}
-100%{background-position:right;}
+0%{
+background-position:left;
+}
+100%{
+background-position:right;
+}
 }
 
 .container{
@@ -74,6 +78,7 @@ width:90%;
 max-width:1200px;
 margin:auto;
 padding-top:40px;
+padding-bottom:40px;
 text-align:center;
 }
 
@@ -91,6 +96,7 @@ padding:40px;
 border-radius:25px;
 margin-bottom:30px;
 backdrop-filter:blur(10px);
+box-shadow:0 0 30px rgba(0,0,0,0.3);
 }
 
 input[type=file]{
@@ -101,21 +107,6 @@ background:#111827;
 color:white;
 border:none;
 margin-bottom:20px;
-}
-
-button{
-padding:18px 45px;
-border:none;
-border-radius:15px;
-font-size:18px;
-cursor:pointer;
-background:linear-gradient(to right,#06b6d4,#7c3aed);
-color:white;
-transition:0.4s;
-}
-
-button:hover{
-transform:scale(1.05);
 }
 
 textarea{
@@ -133,11 +124,35 @@ margin-top:20px;
 margin-bottom:20px;
 }
 
+button{
+padding:18px 45px;
+border:none;
+border-radius:15px;
+font-size:18px;
+cursor:pointer;
+background:linear-gradient(to right,#06b6d4,#7c3aed);
+color:white;
+transition:0.4s;
+font-weight:bold;
+}
+
+button:hover{
+transform:scale(1.05);
+box-shadow:0 0 20px #7c3aed;
+}
+
+.status{
+margin-top:20px;
+font-size:20px;
+font-weight:bold;
+}
+
 .result{
 margin-top:30px;
 background:rgba(255,255,255,0.08);
 padding:30px;
 border-radius:20px;
+backdrop-filter:blur(10px);
 }
 
 .cards{
@@ -153,6 +168,11 @@ background:#111827;
 padding:30px;
 border-radius:20px;
 width:220px;
+transition:0.4s;
+}
+
+.card:hover{
+transform:translateY(-10px);
 }
 
 .card p{
@@ -168,9 +188,91 @@ padding:30px;
 border-radius:20px;
 }
 
-.status{
-margin-top:20px;
+.stats{
+display:flex;
+justify-content:center;
+gap:20px;
+margin-top:30px;
+flex-wrap:wrap;
+}
+
+.stat-card{
+background:#111827;
+padding:25px;
+border-radius:18px;
+width:180px;
+transition:0.4s;
+}
+
+.stat-card:hover{
+transform:translateY(-8px);
+}
+
+.stat-card p{
+font-size:28px;
+margin-top:10px;
+font-weight:bold;
+}
+
+.progress-container{
+margin-top:30px;
+}
+
+.progress-title{
+margin-bottom:12px;
 font-size:20px;
+}
+
+.progress-bar{
+width:100%;
+height:25px;
+background:#1e293b;
+border-radius:20px;
+overflow:hidden;
+}
+
+.progress-fill{
+height:100%;
+width:0%;
+background:linear-gradient(to right,#06b6d4,#7c3aed);
+transition:1s;
+}
+
+.loader{
+width:60px;
+height:60px;
+border:6px solid rgba(255,255,255,0.2);
+border-top:6px solid #7c3aed;
+border-radius:50%;
+margin:20px auto;
+display:none;
+animation:spin 1s linear infinite;
+}
+
+@keyframes spin{
+100%{
+transform:rotate(360deg);
+}
+}
+
+.history-box{
+margin-top:40px;
+background:rgba(255,255,255,0.08);
+padding:30px;
+border-radius:20px;
+text-align:left;
+}
+
+.history-box ul{
+list-style:none;
+margin-top:20px;
+}
+
+.history-box li{
+padding:15px;
+margin-bottom:12px;
+background:#111827;
+border-radius:12px;
 }
 
 </style>
@@ -212,6 +314,8 @@ placeholder="Paste AI or Human text here..."></textarea>
 Analyze Text
 </button>
 
+<div id="loader" class="loader"></div>
+
 </div>
 
 <div class="result">
@@ -219,6 +323,21 @@ Analyze Text
 <h2 id="prediction">
 Waiting For Analysis...
 </h2>
+
+<div class="progress-container">
+
+<div class="progress-title">
+AI Purity Level
+</div>
+
+<div class="progress-bar">
+
+<div class="progress-fill" id="purityBar">
+</div>
+
+</div>
+
+</div>
 
 <div class="cards">
 
@@ -234,10 +353,42 @@ Waiting For Analysis...
 
 </div>
 
+<div class="stats">
+
+<div class="stat-card">
+<h3>Words</h3>
+<p id="wordCount">0</p>
+</div>
+
+<div class="stat-card">
+<h3>Characters</h3>
+<p id="charCount">0</p>
+</div>
+
+<div class="stat-card">
+<h3>Sentences</h3>
+<p id="sentenceCount">0</p>
+</div>
+
+<div class="stat-card">
+<h3>Read Time</h3>
+<p id="readTime">0 Min</p>
+</div>
+
+</div>
+
 </div>
 
 <div class="chart">
 <canvas id="chart"></canvas>
+</div>
+
+<div class="history-box">
+
+<h2>Recent Analysis</h2>
+
+<ul id="historyList"></ul>
+
 </div>
 
 </div>
@@ -289,6 +440,9 @@ alert("Please enter text");
 return;
 }
 
+document.getElementById("loader").style.display =
+"block";
+
 const formData = new FormData();
 
 formData.append("text", text);
@@ -301,6 +455,9 @@ body:formData
 });
 
 const data = await response.json();
+
+document.getElementById("loader").style.display =
+"none";
 
 if(data.error){
 alert(data.error);
@@ -316,7 +473,40 @@ data.human_score + "%";
 document.getElementById("aiScore").innerText =
 data.ai_score + "%";
 
+document.getElementById("purityBar").style.width =
+data.ai_score + "%";
+
 updateChart(data.human_score, data.ai_score);
+
+const words = text.trim().split(/\\s+/).length;
+const chars = text.length;
+const sentences = text.split(/[.!?]+/).length - 1;
+const reading = Math.ceil(words / 200);
+
+document.getElementById("wordCount").innerText =
+words;
+
+document.getElementById("charCount").innerText =
+chars;
+
+document.getElementById("sentenceCount").innerText =
+sentences;
+
+document.getElementById("readTime").innerText =
+reading + " Min";
+
+const history =
+document.getElementById("historyList");
+
+const item =
+document.createElement("li");
+
+item.innerText =
+data.prediction +
+" | AI Score: " +
+data.ai_score + "%";
+
+history.prepend(item);
 
 }
 
@@ -356,6 +546,18 @@ responsive:true
 
 }
 
+document.getElementById("textInput")
+.addEventListener("input", function(){
+
+const text = this.value;
+
+const words = text.trim().split(/\\s+/).length;
+
+document.getElementById("wordCount").innerText =
+words;
+
+});
+
 </script>
 
 </body>
@@ -393,18 +595,33 @@ def train():
 
     try:
 
-        # Read CSV
-        data = pd.read_csv(io.StringIO(
-            file.stream.read().decode("utf-8")
-        ))
+        data = pd.read_csv(
+            io.StringIO(
+                file.stream.read().decode(
+                    "utf-8",
+                    errors="ignore"
+                )
+            ),
+            sep=",",
+            engine="python",
+            on_bad_lines="skip"
+        )
 
-        # Ensure correct columns
+        data = data.iloc[:, :2]
+
         data.columns = ["text", "label"]
 
-        # Clean
         data = data.dropna()
 
-        # Split
+        data["label"] = pd.to_numeric(
+            data["label"],
+            errors="coerce"
+        )
+
+        data = data.dropna()
+
+        data["label"] = data["label"].astype(int)
+
         X_train, X_test, y_train, y_test = train_test_split(
             data["text"],
             data["label"],
@@ -412,7 +629,6 @@ def train():
             random_state=42
         )
 
-        # TF-IDF
         vectorizer = TfidfVectorizer(
             stop_words="english",
             ngram_range=(1, 2),
@@ -422,14 +638,12 @@ def train():
         X_train_vec = vectorizer.fit_transform(X_train)
         X_test_vec = vectorizer.transform(X_test)
 
-        # Model
         model = LogisticRegression(
             max_iter=1000
         )
 
         model.fit(X_train_vec, y_train)
 
-        # Accuracy
         prediction = model.predict(X_test_vec)
 
         accuracy = round(
@@ -438,7 +652,8 @@ def train():
         )
 
         return jsonify({
-            "message": f"Model Trained Successfully | Accuracy: {accuracy}%"
+            "message":
+            f"Model Trained Successfully | Accuracy: {accuracy}%"
         })
 
     except Exception as e:
@@ -460,7 +675,8 @@ def predict():
     if model is None:
 
         return jsonify({
-            "error": "Please Upload And Train Dataset First"
+            "error":
+            "Please Upload And Train Dataset First"
         })
 
     text = request.form.get("text")
