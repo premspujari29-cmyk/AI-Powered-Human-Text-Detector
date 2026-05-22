@@ -1,92 +1,77 @@
 from flask import Flask, request, jsonify, render_template_string
 import pandas as pd
-import re
-import csv
 import os
-from io import StringIO
 
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 
+# =====================================================
+# FLASK APP
+# =====================================================
+
 app = Flask(__name__)
 
 # =====================================================
-# LOAD + CLEAN RTF DATASET
+# LOAD DATASET
 # =====================================================
 
-with open("ai_vs_human_1200_dataset.csv", "r", encoding="utf-8", errors="ignore") as file:
-    raw_data = file.read()
+try:
 
-# Remove RTF formatting
-cleaned = re.sub(r'{\\.*?}|\\\\[a-z]+[0-9]* ?', '', raw_data)
+    data = pd.read_csv("ai_vs_human_1200_dataset.csv")
 
-# Extract lines
-lines = cleaned.splitlines()
+    # Ensure correct columns
+    data.columns = ["text", "label"]
 
-dataset_lines = []
+    # Remove null values
+    data = data.dropna()
 
-for line in lines:
+    # Convert label to integer
+    data["label"] = data["label"].astype(int)
 
-    line = line.strip()
+    print("Dataset Loaded Successfully")
 
-    if "," in line and len(line) > 10:
+except Exception as e:
 
-        # remove ending slash
-        line = line.replace("\\", "")
+    print("DATASET ERROR:", e)
 
-        dataset_lines.append(line)
-
-# Convert into dataframe
-csv_data = "\n".join(dataset_lines)
-
-df = pd.read_csv(StringIO(csv_data))
-
-# Rename columns safely
-df.columns = ["text", "label"]
-
-# Clean
-df = df.dropna()
-
-# Convert label
-df["label"] = df["label"].astype(int)
-
-print(df.head())
+    # Empty fallback dataframe
+    data = pd.DataFrame({
+        "text": ["sample text"],
+        "label": [0]
+    })
 
 # =====================================================
-# SPLIT DATA
+# TRAIN TEST SPLIT
 # =====================================================
 
 X_train, X_test, y_train, y_test = train_test_split(
-    df["text"],
-    df["label"],
+    data["text"],
+    data["label"],
     test_size=0.2,
-    random_state=42,
-    stratify=df["label"]
+    random_state=42
 )
 
 # =====================================================
-# TF-IDF
+# TF-IDF VECTORIZER
 # =====================================================
 
 vectorizer = TfidfVectorizer(
-    ngram_range=(1, 3),
-    max_features=20000,
-    stop_words='english'
+    stop_words="english",
+    ngram_range=(1, 2),
+    max_features=10000
 )
 
 X_train_vec = vectorizer.fit_transform(X_train)
 X_test_vec = vectorizer.transform(X_test)
 
 # =====================================================
-# ADVANCED MODEL
+# MACHINE LEARNING MODEL
 # =====================================================
 
 model = LogisticRegression(
-    max_iter=1000,
-    C=2,
-    solver='liblinear'
+    max_iter=1000
 )
 
 model.fit(X_train_vec, y_train)
@@ -95,14 +80,11 @@ model.fit(X_train_vec, y_train)
 # ACCURACY
 # =====================================================
 
-pred = model.predict(X_test_vec)
+prediction = model.predict(X_test_vec)
 
-accuracy = accuracy_score(y_test, pred)
+accuracy = accuracy_score(y_test, prediction)
 
-print("===================================")
-print("MODEL TRAINED SUCCESSFULLY")
-print("Accuracy:", round(accuracy * 100, 2), "%")
-print("===================================")
+print("MODEL ACCURACY:", round(accuracy * 100, 2), "%")
 
 # =====================================================
 # HTML PAGE
@@ -111,14 +93,13 @@ print("===================================")
 HTML_PAGE = """
 
 <!DOCTYPE html>
-<html lang="en">
+<html>
 
 <head>
 
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Text Detector</title>
 
-<title>AI Detector</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -143,25 +124,25 @@ width:100%;
 height:100%;
 background:linear-gradient(45deg,#0f172a,#111827,#1e293b);
 background-size:400% 400%;
-animation:bg 12s infinite alternate;
+animation:bgMove 10s infinite alternate;
 z-index:-1;
 }
 
-@keyframes bg{
+@keyframes bgMove{
 0%{background-position:left;}
 100%{background-position:right;}
 }
 
 .container{
 width:90%;
-max-width:1200px;
+max-width:1100px;
 margin:auto;
 padding-top:40px;
 text-align:center;
 }
 
 h1{
-font-size:55px;
+font-size:50px;
 margin-bottom:20px;
 background:linear-gradient(to right,#00d4ff,#7c3aed);
 -webkit-background-clip:text;
@@ -171,8 +152,8 @@ background:linear-gradient(to right,#00d4ff,#7c3aed);
 .accuracy{
 display:inline-block;
 padding:15px 30px;
-border-radius:15px;
 background:rgba(255,255,255,0.1);
+border-radius:15px;
 margin-bottom:30px;
 }
 
@@ -193,8 +174,8 @@ border-radius:20px;
 background:#0f172a;
 color:white;
 font-size:18px;
-margin-bottom:20px;
 resize:none;
+margin-bottom:20px;
 }
 
 button{
@@ -214,9 +195,9 @@ transform:scale(1.05);
 
 .result{
 margin-top:40px;
+background:rgba(255,255,255,0.08);
 padding:30px;
 border-radius:20px;
-background:rgba(255,255,255,0.08);
 }
 
 .cards{
@@ -234,9 +215,12 @@ border-radius:20px;
 width:220px;
 }
 
+.card h3{
+margin-bottom:10px;
+}
+
 .card p{
 font-size:35px;
-margin-top:10px;
 font-weight:bold;
 }
 
@@ -311,15 +295,18 @@ async function analyzeText(){
 const text =
 document.getElementById("textInput").value;
 
+if(text.trim() === ""){
+alert("Please enter text");
+return;
+}
+
 const formData = new FormData();
 
 formData.append("text", text);
 
 const response = await fetch('/predict',{
-
 method:'POST',
 body:formData
-
 });
 
 const data = await response.json();
@@ -381,7 +368,7 @@ responsive:true
 """
 
 # =====================================================
-# HOME
+# HOME ROUTE
 # =====================================================
 
 @app.route("/")
@@ -393,7 +380,7 @@ def home():
     )
 
 # =====================================================
-# PREDICT
+# PREDICT ROUTE
 # =====================================================
 
 @app.route("/predict", methods=["POST"])
@@ -401,7 +388,8 @@ def predict():
 
     text = request.form.get("text")
 
-    if text.strip() == "":
+    if not text or text.strip() == "":
+
         return jsonify({
             "prediction": "Please Enter Text",
             "human_score": 0,
@@ -429,7 +417,7 @@ def predict():
     })
 
 # =====================================================
-# RUN
+# RUN APP
 # =====================================================
 
 if __name__ == "__main__":
@@ -438,6 +426,5 @@ if __name__ == "__main__":
 
     app.run(
         host="0.0.0.0",
-        port=port,
-        debug=True
+        port=port
     )
