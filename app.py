@@ -22,6 +22,10 @@ model = None
 vectorizer = None
 accuracy = 0
 
+human_count = 0
+ai_count = 0
+dataset_size = 0
+
 # =====================================================
 # HTML PAGE
 # =====================================================
@@ -39,6 +43,8 @@ HTML_PAGE = """
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+<script src="https://cdn.jsdelivr.net/npm/tsparticles@2/tsparticles.bundle.min.js"></script>
+
 <style>
 
 *{
@@ -52,6 +58,15 @@ body{
 background:#050816;
 color:white;
 overflow-x:hidden;
+}
+
+#tsparticles{
+position:fixed;
+width:100%;
+height:100%;
+z-index:-2;
+top:0;
+left:0;
 }
 
 .bg{
@@ -75,15 +90,15 @@ background-position:right;
 
 .container{
 width:90%;
-max-width:1200px;
+max-width:1300px;
 margin:auto;
 padding-top:40px;
-padding-bottom:40px;
+padding-bottom:50px;
 text-align:center;
 }
 
 h1{
-font-size:55px;
+font-size:58px;
 margin-bottom:20px;
 background:linear-gradient(to right,#00d4ff,#7c3aed);
 -webkit-background-clip:text;
@@ -97,6 +112,11 @@ border-radius:25px;
 margin-bottom:30px;
 backdrop-filter:blur(10px);
 box-shadow:0 0 30px rgba(0,0,0,0.3);
+transition:0.4s;
+}
+
+.upload-box:hover{
+transform:translateY(-5px);
 }
 
 input[type=file]{
@@ -138,7 +158,7 @@ font-weight:bold;
 
 button:hover{
 transform:scale(1.05);
-box-shadow:0 0 20px #7c3aed;
+box-shadow:0 0 25px #7c3aed;
 }
 
 .status{
@@ -179,13 +199,6 @@ transform:translateY(-10px);
 font-size:35px;
 font-weight:bold;
 margin-top:10px;
-}
-
-.chart{
-margin-top:40px;
-background:rgba(255,255,255,0.08);
-padding:30px;
-border-radius:20px;
 }
 
 .stats{
@@ -255,6 +268,79 @@ transform:rotate(360deg);
 }
 }
 
+.chart-container{
+margin-top:40px;
+display:grid;
+grid-template-columns:1fr 1fr;
+gap:25px;
+align-items:center;
+}
+
+.chart-card{
+background:rgba(255,255,255,0.08);
+padding:30px;
+border-radius:25px;
+backdrop-filter:blur(10px);
+animation:floatCard 4s ease-in-out infinite;
+}
+
+.small-chart{
+width:320px;
+height:320px;
+margin:auto;
+}
+
+.dataset-stats{
+display:flex;
+flex-direction:column;
+gap:20px;
+}
+
+.dataset-card{
+background:rgba(255,255,255,0.08);
+padding:30px;
+border-radius:20px;
+backdrop-filter:blur(10px);
+transition:0.4s;
+position:relative;
+overflow:hidden;
+}
+
+.dataset-card::before{
+content:'';
+position:absolute;
+width:100%;
+height:5px;
+top:0;
+left:0;
+background:linear-gradient(to right,#06b6d4,#7c3aed);
+}
+
+.dataset-card:hover{
+transform:translateY(-8px) scale(1.02);
+}
+
+.dataset-card p{
+font-size:38px;
+font-weight:bold;
+margin-top:12px;
+background:linear-gradient(to right,#06b6d4,#7c3aed);
+-webkit-background-clip:text;
+-webkit-text-fill-color:transparent;
+}
+
+@keyframes floatCard{
+0%{
+transform:translateY(0px);
+}
+50%{
+transform:translateY(-10px);
+}
+100%{
+transform:translateY(0px);
+}
+}
+
 .history-box{
 margin-top:40px;
 background:rgba(255,255,255,0.08);
@@ -275,11 +361,26 @@ background:#111827;
 border-radius:12px;
 }
 
+@media(max-width:900px){
+
+.chart-container{
+grid-template-columns:1fr;
+}
+
+.small-chart{
+width:260px;
+height:260px;
+}
+
+}
+
 </style>
 
 </head>
 
 <body>
+
+<div id="tsparticles"></div>
 
 <div class="bg"></div>
 
@@ -379,8 +480,37 @@ AI Purity Level
 
 </div>
 
-<div class="chart">
+<div class="chart-container">
+
+<div class="chart-card">
+
+<h2>AI vs Human Comparison</h2>
+
+<div class="small-chart">
 <canvas id="chart"></canvas>
+</div>
+
+</div>
+
+<div class="dataset-stats">
+
+<div class="dataset-card">
+<h3>Total Human Text</h3>
+<p id="datasetHuman">0</p>
+</div>
+
+<div class="dataset-card">
+<h3>Total AI Text</h3>
+<p id="datasetAI">0</p>
+</div>
+
+<div class="dataset-card">
+<h3>Dataset Size</h3>
+<p id="datasetSize">0</p>
+</div>
+
+</div>
+
 </div>
 
 <div class="history-box">
@@ -396,6 +526,42 @@ AI Purity Level
 <script>
 
 let chart;
+
+tsParticles.load("tsparticles",{
+
+particles:{
+
+number:{
+value:60
+},
+
+color:{
+value:"#7c3aed"
+},
+
+links:{
+enable:true,
+distance:120,
+color:"#06b6d4",
+opacity:0.2
+},
+
+move:{
+enable:true,
+speed:1
+},
+
+size:{
+value:2
+},
+
+opacity:{
+value:0.5
+}
+
+}
+
+});
 
 async function uploadDataset(){
 
@@ -414,7 +580,7 @@ const formData = new FormData();
 formData.append("file", file);
 
 document.getElementById("trainStatus").innerText =
-"Training Model...";
+"Training Advanced AI Model...";
 
 const response = await fetch('/train',{
 
@@ -427,6 +593,15 @@ const data = await response.json();
 
 document.getElementById("trainStatus").innerText =
 data.message;
+
+document.getElementById("datasetHuman").innerText =
+data.human_count;
+
+document.getElementById("datasetAI").innerText =
+data.ai_count;
+
+document.getElementById("datasetSize").innerText =
+data.dataset_size;
 
 }
 
@@ -524,9 +699,11 @@ chart = new Chart(ctx,{
 type:'doughnut',
 
 data:{
+
 labels:['Human','AI'],
 
 datasets:[{
+
 data:[human, ai],
 
 backgroundColor:[
@@ -534,12 +711,43 @@ backgroundColor:[
 '#7c3aed'
 ],
 
-borderWidth:0
+hoverOffset:15,
+
+borderWidth:2,
+
+borderColor:'#050816'
+
 }]
+
 },
 
 options:{
-responsive:true
+
+responsive:true,
+
+cutout:'75%',
+
+plugins:{
+
+legend:{
+position:'bottom',
+
+labels:{
+color:'white',
+padding:20,
+font:{
+size:15
+}
+}
+}
+
+},
+
+animation:{
+animateRotate:true,
+duration:2000
+}
+
 }
 
 });
@@ -571,7 +779,6 @@ words;
 
 @app.route("/")
 def home():
-
     return render_template_string(HTML_PAGE)
 
 # =====================================================
@@ -584,6 +791,9 @@ def train():
     global model
     global vectorizer
     global accuracy
+    global human_count
+    global ai_count
+    global dataset_size
 
     if "file" not in request.files:
 
@@ -622,6 +832,10 @@ def train():
 
         data["label"] = data["label"].astype(int)
 
+        human_count = len(data[data["label"] == 0])
+        ai_count = len(data[data["label"] == 1])
+        dataset_size = len(data)
+
         X_train, X_test, y_train, y_test = train_test_split(
             data["text"],
             data["label"],
@@ -652,8 +866,18 @@ def train():
         )
 
         return jsonify({
+
             "message":
-            f"Model Trained Successfully | Accuracy: {accuracy}%"
+            f"Model Trained Successfully | Accuracy: {accuracy}%",
+
+            "accuracy":accuracy,
+
+            "human_count":human_count,
+
+            "ai_count":ai_count,
+
+            "dataset_size":dataset_size
+
         })
 
     except Exception as e:
