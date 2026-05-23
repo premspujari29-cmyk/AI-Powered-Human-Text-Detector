@@ -27,11 +27,21 @@ model1 = None
 model2 = None
 vectorizer = None
 
-accuracy = 0
+# =====================================================
+# CLEAN TEXT
+# =====================================================
 
-human_count = 0
-ai_count = 0
-dataset_size = 0
+def clean_text(text):
+
+    text = str(text).lower()
+
+    text = re.sub(r"http\\S+", "", text)
+
+    text = re.sub(r"[^a-zA-Z0-9\\s]", "", text)
+
+    text = re.sub(r"\\s+", " ", text).strip()
+
+    return text
 
 # =====================================================
 # ADVANCED NLP FEATURES
@@ -78,22 +88,6 @@ def extract_advanced_features(text):
         punctuation_count,
         uppercase_ratio
     ]])
-
-# =====================================================
-# CLEAN TEXT
-# =====================================================
-
-def clean_text(text):
-
-    text = str(text).lower()
-
-    text = re.sub(r"http\\S+", "", text)
-
-    text = re.sub(r"[^a-zA-Z0-9\\s]", "", text)
-
-    text = re.sub(r"\\s+", " ", text).strip()
-
-    return text
 
 # =====================================================
 # HTML PAGE
@@ -569,6 +563,7 @@ color:'white'
 </script>
 
 </body>
+
 </html>
 
 """
@@ -602,23 +597,49 @@ def train():
 
     try:
 
+        # =================================================
+        # SAFE CSV READER
+        # =================================================
+
         data = pd.read_csv(
+
             io.StringIO(
                 file.stream.read().decode(
                     "utf-8",
                     errors="ignore"
                 )
             ),
+
             sep=",",
+
             engine="python",
+
             on_bad_lines="skip"
+
         )
+
+        # =================================================
+        # AUTO DETECT COLUMNS
+        # =================================================
+
+        if len(data.columns) < 2:
+
+            return jsonify({
+                "message":
+                "Dataset must contain at least 2 columns"
+            })
 
         data = data.iloc[:, :2]
 
         data.columns = ["text", "label"]
 
+        # =================================================
+        # CLEAN DATA
+        # =================================================
+
         data = data.dropna()
+
+        data["text"] = data["text"].astype(str)
 
         data["label"] = pd.to_numeric(
             data["label"],
@@ -629,7 +650,51 @@ def train():
 
         data["label"] = data["label"].astype(int)
 
-        data["text"] = data["text"].apply(clean_text)
+        data = data[
+            data["label"].isin([0,1])
+        ]
+
+        data = data.drop_duplicates()
+
+        data["text"] = data["text"].apply(
+            clean_text
+        )
+
+        # =================================================
+        # DATASET SIZE
+        # =================================================
+
+        dataset_size = len(data)
+
+        if dataset_size < 10:
+
+            return jsonify({
+                "message":
+                "Dataset too small. Upload at least 10 rows."
+            })
+
+        # =================================================
+        # AUTO TF-IDF SETTINGS
+        # =================================================
+
+        if dataset_size < 100:
+
+            max_features = 3000
+            ngram = (1,1)
+
+        elif dataset_size < 1000:
+
+            max_features = 10000
+            ngram = (1,2)
+
+        else:
+
+            max_features = 30000
+            ngram = (1,3)
+
+        # =================================================
+        # SPLIT
+        # =================================================
 
         X_train, X_test, y_train, y_test = train_test_split(
 
@@ -644,45 +709,75 @@ def train():
 
         )
 
+        # =================================================
+        # TF-IDF
+        # =================================================
+
         vectorizer = TfidfVectorizer(
 
             stop_words="english",
 
-            ngram_range=(1,3),
+            ngram_range=ngram,
 
-            max_features=30000,
+            max_features=max_features,
 
             sublinear_tf=True,
 
-            min_df=2,
+            min_df=1,
 
-            max_df=0.9
+            max_df=1.0
 
         )
 
-        X_train_vec = vectorizer.fit_transform(X_train)
+        X_train_vec = vectorizer.fit_transform(
+            X_train
+        )
 
-        X_test_vec = vectorizer.transform(X_test)
+        X_test_vec = vectorizer.transform(
+            X_test
+        )
+
+        # =================================================
+        # ADVANCED NLP FEATURES
+        # =================================================
 
         train_extra = np.vstack([
+
             extract_advanced_features(t)[0]
+
             for t in X_train
+
         ])
 
         test_extra = np.vstack([
+
             extract_advanced_features(t)[0]
+
             for t in X_test
+
         ])
 
+        # =================================================
+        # COMBINE FEATURES
+        # =================================================
+
         X_train_final = hstack([
+
             X_train_vec,
             train_extra
+
         ])
 
         X_test_final = hstack([
+
             X_test_vec,
             test_extra
+
         ])
+
+        # =================================================
+        # MODELS
+        # =================================================
 
         model1 = LinearSVC()
 
@@ -694,39 +789,66 @@ def train():
 
         )
 
-        model1.fit(X_train_final, y_train)
+        # =================================================
+        # TRAIN
+        # =================================================
 
-        model2.fit(X_train_final, y_train)
+        model1.fit(
+            X_train_final,
+            y_train
+        )
 
-        pred1 = model1.predict(X_test_final)
+        model2.fit(
+            X_train_final,
+            y_train
+        )
 
-        pred2 = model2.predict(X_test_final)
+        # =================================================
+        # ACCURACY
+        # =================================================
 
-        prediction = []
+        pred1 = model1.predict(
+            X_test_final
+        )
+
+        pred2 = model2.predict(
+            X_test_final
+        )
+
+        final_pred = []
 
         for p1, p2 in zip(pred1, pred2):
 
             if p1 == p2:
-                prediction.append(p1)
+                final_pred.append(p1)
             else:
-                prediction.append(p1)
+                final_pred.append(p1)
 
         accuracy = round(
-            accuracy_score(y_test, prediction) * 100,
+
+            accuracy_score(
+                y_test,
+                final_pred
+            ) * 100,
+
             2
+
         )
 
         return jsonify({
 
             "message":
-            f"Advanced Model Trained | Accuracy: {accuracy}%"
+            f"Advanced Model Trained Successfully | Accuracy: {accuracy}%"
 
         })
 
     except Exception as e:
 
         return jsonify({
-            "message": f"Error: {str(e)}"
+
+            "message":
+            f"Training Error: {str(e)}"
+
         })
 
 # =====================================================
@@ -749,18 +871,30 @@ def predict():
 
     text = request.form.get("text")
 
-    vectorized_text = vectorizer.transform([text])
+    cleaned_text = clean_text(text)
 
-    extra_features = extract_advanced_features(text)
+    vectorized_text = vectorizer.transform(
+        [cleaned_text]
+    )
+
+    extra_features = extract_advanced_features(
+        cleaned_text
+    )
 
     final_input = hstack([
+
         vectorized_text,
         extra_features
+
     ])
 
-    pred1 = model1.predict(final_input)[0]
+    pred1 = model1.predict(
+        final_input
+    )[0]
 
-    pred2 = model2.predict(final_input)[0]
+    pred2 = model2.predict(
+        final_input
+    )[0]
 
     if pred1 == pred2:
         prediction = pred1
@@ -768,7 +902,11 @@ def predict():
         prediction = pred1
 
     score = abs(
-        model1.decision_function(final_input)[0]
+
+        model1.decision_function(
+            final_input
+        )[0]
+
     )
 
     confidence = round(
@@ -796,9 +934,13 @@ def predict():
     sentences = re.split(r'[.!?]+', text)
 
     sentence_lengths = [
+
         len(s.split())
+
         for s in sentences
+
         if s.strip()
+
     ]
 
     burstiness = np.std(sentence_lengths)
@@ -838,9 +980,15 @@ def predict():
 
         "prediction": result,
 
-        "human_score": round(human_score, 2),
+        "human_score": round(
+            human_score,
+            2
+        ),
 
-        "ai_score": round(ai_score, 2),
+        "ai_score": round(
+            ai_score,
+            2
+        ),
 
         "confidence": confidence
 
@@ -852,9 +1000,14 @@ def predict():
 
 if __name__ == "__main__":
 
-    port = int(os.environ.get("PORT", 5000))
+    port = int(
+        os.environ.get("PORT", 5000)
+    )
 
     app.run(
+
         host="0.0.0.0",
+
         port=port
+
     )
