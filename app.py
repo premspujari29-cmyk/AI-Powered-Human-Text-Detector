@@ -197,6 +197,7 @@ background:linear-gradient(to right,#06b6d4,#7c3aed);
 color:white;
 transition:0.4s;
 font-weight:bold;
+margin:10px;
 }
 
 button:hover{
@@ -291,6 +292,30 @@ margin:auto;
 margin-top:30px;
 }
 
+.voice-controls{
+margin-top:15px;
+}
+
+#voiceBtn.listening{
+animation:pulse 1s infinite;
+}
+
+@keyframes pulse{
+
+0%{
+box-shadow:0 0 0 0 rgba(124,58,237,0.7);
+}
+
+70%{
+box-shadow:0 0 0 20px rgba(124,58,237,0);
+}
+
+100%{
+box-shadow:0 0 0 0 rgba(124,58,237,0);
+}
+
+}
+
 </style>
 
 </head>
@@ -325,6 +350,17 @@ No Dataset Uploaded
 
 <textarea id="textInput"
 placeholder="Paste AI or Human text here..."></textarea>
+
+<div class="voice-controls">
+
+<button id="voiceBtn"
+onclick="startVoiceTyping()">
+
+Start Voice Typing
+
+</button>
+
+</div>
 
 <button onclick="analyzeText()">
 Analyze Text
@@ -560,6 +596,92 @@ color:'white'
 
 }
 
+let recognition;
+
+function startVoiceTyping(){
+
+if(!('webkitSpeechRecognition' in window)){
+
+alert("Voice recognition not supported");
+
+return;
+
+}
+
+recognition = new webkitSpeechRecognition();
+
+recognition.continuous = true;
+
+recognition.interimResults = true;
+
+recognition.lang = "en-US";
+
+const button =
+document.getElementById("voiceBtn");
+
+button.classList.add("listening");
+
+button.innerText = "Listening...";
+
+recognition.onresult = function(event){
+
+let transcript = "";
+
+for(let i = event.resultIndex;
+i < event.results.length;
+i++){
+
+transcript +=
+event.results[i][0].transcript;
+
+}
+
+document.getElementById("textInput").value =
+transcript;
+
+};
+
+recognition.onerror = function(){
+
+button.classList.remove("listening");
+
+button.innerText = "Start Voice Typing";
+
+};
+
+recognition.onend = function(){
+
+button.classList.remove("listening");
+
+button.innerText = "Start Voice Typing";
+
+};
+
+recognition.start();
+
+button.onclick = stopVoiceTyping;
+
+}
+
+function stopVoiceTyping(){
+
+if(recognition){
+
+recognition.stop();
+
+}
+
+const button =
+document.getElementById("voiceBtn");
+
+button.classList.remove("listening");
+
+button.innerText = "Start Voice Typing";
+
+button.onclick = startVoiceTyping;
+
+}
+
 </script>
 
 </body>
@@ -597,18 +719,24 @@ def train():
 
     try:
 
-        # =================================================
-        # SAFE CSV READER
-        # =================================================
+        raw_text = file.stream.read().decode(
+            "utf-8",
+            errors="ignore"
+        )
+
+        if raw_text.startswith("{\\rtf"):
+
+            raw_text = re.sub(
+                r'{\\\\.*?}|\\\\[a-z]+[0-9]* ?',
+                '',
+                raw_text
+            )
+
+            raw_text = raw_text.replace("\\", "\n")
 
         data = pd.read_csv(
 
-            io.StringIO(
-                file.stream.read().decode(
-                    "utf-8",
-                    errors="ignore"
-                )
-            ),
+            io.StringIO(raw_text),
 
             sep=",",
 
@@ -617,10 +745,6 @@ def train():
             on_bad_lines="skip"
 
         )
-
-        # =================================================
-        # AUTO DETECT COLUMNS
-        # =================================================
 
         if len(data.columns) < 2:
 
@@ -632,10 +756,6 @@ def train():
         data = data.iloc[:, :2]
 
         data.columns = ["text", "label"]
-
-        # =================================================
-        # CLEAN DATA
-        # =================================================
 
         data = data.dropna()
 
@@ -660,10 +780,6 @@ def train():
             clean_text
         )
 
-        # =================================================
-        # DATASET SIZE
-        # =================================================
-
         dataset_size = len(data)
 
         if dataset_size < 10:
@@ -672,10 +788,6 @@ def train():
                 "message":
                 "Dataset too small. Upload at least 10 rows."
             })
-
-        # =================================================
-        # AUTO TF-IDF SETTINGS
-        # =================================================
 
         if dataset_size < 100:
 
@@ -692,10 +804,6 @@ def train():
             max_features = 30000
             ngram = (1,3)
 
-        # =================================================
-        # SPLIT
-        # =================================================
-
         X_train, X_test, y_train, y_test = train_test_split(
 
             data["text"],
@@ -708,10 +816,6 @@ def train():
             stratify=data["label"]
 
         )
-
-        # =================================================
-        # TF-IDF
-        # =================================================
 
         vectorizer = TfidfVectorizer(
 
@@ -737,10 +841,6 @@ def train():
             X_test
         )
 
-        # =================================================
-        # ADVANCED NLP FEATURES
-        # =================================================
-
         train_extra = np.vstack([
 
             extract_advanced_features(t)[0]
@@ -757,10 +857,6 @@ def train():
 
         ])
 
-        # =================================================
-        # COMBINE FEATURES
-        # =================================================
-
         X_train_final = hstack([
 
             X_train_vec,
@@ -775,10 +871,6 @@ def train():
 
         ])
 
-        # =================================================
-        # MODELS
-        # =================================================
-
         model1 = LinearSVC()
 
         model2 = RandomForestClassifier(
@@ -789,10 +881,6 @@ def train():
 
         )
 
-        # =================================================
-        # TRAIN
-        # =================================================
-
         model1.fit(
             X_train_final,
             y_train
@@ -802,10 +890,6 @@ def train():
             X_train_final,
             y_train
         )
-
-        # =================================================
-        # ACCURACY
-        # =================================================
 
         pred1 = model1.predict(
             X_test_final
