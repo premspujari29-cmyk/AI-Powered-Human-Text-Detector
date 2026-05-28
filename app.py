@@ -610,7 +610,7 @@ return;
 
 recognition = new webkitSpeechRecognition();
 
-recognition.continuous = true;
+recognition.continuous = false;
 
 recognition.interimResults = true;
 
@@ -625,6 +625,9 @@ button.innerText = "Listening...";
 
 recognition.onresult = function(event){
 
+let currentText =
+document.getElementById("textInput").value;
+
 let transcript = "";
 
 for(let i = event.resultIndex;
@@ -632,12 +635,12 @@ i < event.results.length;
 i++){
 
 transcript +=
-event.results[i][0].transcript;
+event.results[i][0].transcript + " ";
 
 }
 
 document.getElementById("textInput").value =
-transcript;
+currentText + transcript;
 
 };
 
