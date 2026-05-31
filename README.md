@@ -94,21 +94,7 @@ The application displays:
 
 ---
 
-## 📂 Project Structure
 
-```bash
-AI-vs-Human-Text-Detection/
-│
-├── dataset/
-│   └── text_dataset.csv
-│
-├── models/
-│   └── trained_model.pkl
-│
-├── app.py
-├── train_model.py
-├── requirements.txt
-└── README.md
 ```
 
 ---
