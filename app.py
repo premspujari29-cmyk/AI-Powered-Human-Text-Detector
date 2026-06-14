@@ -600,79 +600,103 @@ let recognition;
 
 function startVoiceTyping(){
 
-if(!('webkitSpeechRecognition' in window)){
+    if(!('webkitSpeechRecognition' in window)){
 
-alert("Voice recognition not supported");
+        alert("Voice recognition not supported");
 
-return;
+        return;
 
-}
+    }
 
-recognition = new webkitSpeechRecognition();
+    recognition = new webkitSpeechRecognition();
 
-recognition.continuous = false;
+    recognition.continuous = true;
 
-recognition.interimResults = true;
+    recognition.interimResults = true;
 
-recognition.lang = "en-US";
+    recognition.lang = "en-US";
 
-const button =
-document.getElementById("voiceBtn");
+    const button =
+    document.getElementById("voiceBtn");
 
-button.classList.add("listening");
+    button.classList.add("listening");
 
-button.innerText = "Listening...";
+    button.innerText = "Listening...";
 
-recognition.onresult = function(event){
+    let finalTranscript =
+    document.getElementById("textInput").value + " ";
 
-let currentText =
-document.getElementById("textInput").value;
+    recognition.onresult = function(event){
 
-let transcript = "";
+        let interimTranscript = "";
 
-for(let i = event.resultIndex;
-i < event.results.length;
-i++){
+        for(
+            let i = event.resultIndex;
+            i < event.results.length;
+            i++
+        ){
 
-transcript +=
-event.results[i][0].transcript + " ";
+            const transcript =
+            event.results[i][0].transcript;
 
-}
+            if(event.results[i].isFinal){
 
-document.getElementById("textInput").value =
-currentText + transcript;
+                finalTranscript += transcript + " ";
 
-};
+            }else{
 
-recognition.onerror = function(){
+                interimTranscript += transcript;
 
-button.classList.remove("listening");
+            }
 
-button.innerText = "Start Voice Typing";
+        }
 
-};
+        document.getElementById("textInput").value =
+        finalTranscript + interimTranscript;
 
-recognition.onend = function(){
+    };
 
-button.classList.remove("listening");
+    recognition.onerror = function(){
 
-button.innerText = "Start Voice Typing";
+        button.classList.remove("listening");
 
-};
+        button.innerText = "Start Voice Typing";
 
-recognition.start();
+    };
 
-button.onclick = stopVoiceTyping;
+    recognition.onend = function(){
+
+        button.classList.remove("listening");
+
+        button.innerText = "Start Voice Typing";
+
+    };
+
+    recognition.start();
+
+    button.onclick = stopVoiceTyping;
 
 }
 
 function stopVoiceTyping(){
 
-if(recognition){
+    if(recognition){
 
-recognition.stop();
+        recognition.stop();
+
+    }
+
+    const button =
+    document.getElementById("voiceBtn");
+
+    button.classList.remove("listening");
+
+    button.innerText = "Start Voice Typing";
+
+    button.onclick = startVoiceTyping;
 
 }
+
 
 const button =
 document.getElementById("voiceBtn");
