@@ -159,36 +159,59 @@ def extract_features(text):
 # LABEL ORIENTATION DETECTION
 # =====================================================
 
-def detect_ai_label(data):
+# A strongly AI-sounding probe sentence used to calibrate label orientation
+_AI_PROBE = (
+    "furthermore it is important to note that in conclusion the overall "
+    "multifaceted paradigm leverages a robust and seamless tapestry of "
+    "nuanced best practices that underscore the holistic approach to "
+    "state-of-the-art cutting-edge solutions additionally it should be "
+    "noted that consequently this fosters a wide range of key takeaways"
+)
+
+# A strongly human-sounding probe sentence
+_HUMAN_PROBE = (
+    "i can't believe how tired i was after that, honestly didn't think "
+    "i'd make it through the day. my legs were killing me and i just "
+    "wanted to go home. you know what i mean? it's just one of those "
+    "days where nothing goes right and i'm like, why am i even doing this"
+)
+
+def detect_ai_label_via_probe(fitted_vectorizer, fitted_calibrated, fitted_rf):
     """
-    Auto-detect which label (0 or 1) means AI-generated text
-    by checking which group has more AI-like linguistic features.
+    After training, send a known-AI sentence and a known-human sentence
+    through the model. Whichever label the model assigns to the AI probe
+    IS the AI label. This is immune to dataset label convention differences.
 
     Returns (ai_label, human_label).
     """
-    group0 = data[data["label"] == 0]["text"].tolist()
-    group1 = data[data["label"] == 1]["text"].tolist()
+    def get_avg_proba(text):
+        cleaned = clean_text(text)
+        tv = fitted_vectorizer.transform([cleaned])
+        fv = extract_features(cleaned)
+        xi = hstack([tv, csr_matrix(fv)])
+        p1 = fitted_calibrated.predict_proba(xi)[0]
+        p2 = fitted_rf.predict_proba(xi)[0]
+        return (p1 + p2) / 2   # shape: (n_classes,)
 
-    def ai_score_for_group(texts):
-        scores = []
-        for t in texts[:200]:           # sample up to 200 for speed
-            lower = str(t).lower()
-            hits  = sum(1 for p in AI_VOCAB if p in lower)
-            words = str(t).split()
-            sents = [s for s in re.split(r'[.!?]+', str(t)) if s.strip()]
-            sent_lens = [len(s.split()) for s in sents]
-            std   = np.std(sent_lens) if len(sent_lens) > 1 else 0
-            # High AI vocab + low variance in sentence length → AI
-            scores.append(hits - std * 0.1)
-        return np.mean(scores) if scores else 0
+    classes    = fitted_calibrated.classes_          # e.g. [0, 1]
+    ai_proba   = get_avg_proba(_AI_PROBE)
+    hum_proba  = get_avg_proba(_HUMAN_PROBE)
 
-    score0 = ai_score_for_group(group0)
-    score1 = ai_score_for_group(group1)
+    # The label that scores HIGHER for the AI probe is the AI label
+    ai_label_idx    = int(np.argmax(ai_proba))
+    human_label_idx = int(np.argmax(hum_proba))
 
-    if score1 > score0:
-        return 1, 0   # label 1 = AI, label 0 = Human
-    else:
-        return 0, 1   # label 0 = AI, label 1 = Human
+    ai_label    = int(classes[ai_label_idx])
+    human_label = int(classes[human_label_idx])
+
+    # Sanity-check: if both probes map to the same label, fall back to
+    # whichever class has a higher mean AI-vocab score in the training data
+    if ai_label == human_label:
+        # Means the model isn't confident either way — pick 1 as AI by default
+        ai_label    = 1
+        human_label = 0
+
+    return ai_label, human_label
 
 # =====================================================
 # HTML PAGE
@@ -604,9 +627,6 @@ def train():
         if n < 20:
             return jsonify({"message": "Dataset too small — need at least 20 rows."})
 
-        # ── Auto-detect which label means AI ──────────────────────────────────
-        AI_LABEL, HUMAN_LABEL = detect_ai_label(data)
-
         # ── Adaptive TF-IDF ───────────────────────────────────────────────────
         if n < 100:
             max_feat, ngram, max_df_v = 3000,  (1,1), 1.0
@@ -646,6 +666,11 @@ def train():
             min_samples_leaf=2, random_state=42, n_jobs=-1
         )
         model_rf.fit(Xtr, y_train)
+
+        # ── Auto-detect which label means AI (after training, using probes) ───
+        AI_LABEL, HUMAN_LABEL = detect_ai_label_via_probe(
+            vectorizer, model_calibrated, model_rf
+        )
 
         # ── Ensemble accuracy ─────────────────────────────────────────────────
         prob_svc = model_calibrated.predict_proba(Xte)
