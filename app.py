@@ -342,6 +342,94 @@ button:disabled { opacity:0.5; cursor:not-allowed; transform:none; box-shadow:no
 .signal-bar-wrap { width:40%; height:10px; background:#1e293b; border-radius:10px; overflow:hidden; }
 .signal-bar-fill { height:100%; border-radius:10px; transition:0.8s; }
 .signal-val { font-size:13px; color:white; width:5%; text-align:right; }
+
+/* ── HOW OUR AI WORKS ───────────────────────────────────────────────────── */
+.how-section {
+  margin-top:50px;
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.07);
+  border-radius:25px;
+  padding:50px 40px;
+  text-align:left;
+}
+@media(max-width:600px){ .how-section{ padding:30px 20px; } }
+
+.how-header { text-align:center; margin-bottom:48px; }
+.how-eyebrow {
+  display:inline-block;
+  font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase;
+  color:#00d4ff; background:rgba(0,212,255,0.1);
+  border:1px solid rgba(0,212,255,0.2);
+  padding:5px 14px; border-radius:999px; margin-bottom:16px;
+}
+.how-title {
+  font-size:clamp(24px,4vw,38px); font-weight:800;
+  line-height:1.1; margin-bottom:14px;
+}
+.how-grad {
+  background:linear-gradient(to right,#00d4ff,#7c3aed);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+}
+.how-sub { font-size:15px; color:#94a3b8; max-width:560px; margin:0 auto; line-height:1.65; }
+
+/* Timeline */
+.how-timeline { display:flex; flex-direction:column; gap:0; }
+
+.how-step {
+  display:flex; gap:24px; align-items:flex-start;
+  padding:28px 0;
+  border-bottom:1px solid rgba(255,255,255,0.05);
+}
+.how-step:last-child { border-bottom:none; }
+
+.how-step-icon {
+  flex-shrink:0;
+  width:48px; height:48px; border-radius:50%;
+  border:1px solid rgba(124,58,237,0.4);
+  background:rgba(124,58,237,0.1);
+  display:flex; align-items:center; justify-content:center;
+  font-size:20px;
+  background:linear-gradient(135deg,#00d4ff,#7c3aed);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  font-weight:800;
+}
+
+.how-step-body h3 {
+  font-size:17px; font-weight:700; margin-bottom:10px; color:#f1f5f9;
+}
+.how-step-body p { font-size:14px; color:#94a3b8; line-height:1.7; }
+
+/* Feature chips */
+.how-chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+.chip {
+  font-size:12px; font-weight:600; padding:4px 12px;
+  border-radius:999px; background:rgba(124,58,237,0.12);
+  border:1px solid rgba(124,58,237,0.25); color:#c4b5fd;
+}
+
+/* Model cards */
+.how-model-cards { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px; }
+@media(max-width:600px){ .how-model-cards{ grid-template-columns:1fr; } }
+.how-model-card {
+  background:#0f172a; border:1px solid rgba(255,255,255,0.07);
+  border-radius:14px; padding:20px;
+}
+.how-model-icon { font-size:24px; margin-bottom:10px; }
+.how-model-name { font-size:15px; font-weight:700; color:#f1f5f9; margin-bottom:8px; }
+.how-model-desc { font-size:13px; color:#94a3b8; line-height:1.65; }
+
+/* Heuristic rule list */
+.how-rule-list { display:flex; flex-direction:column; gap:8px; margin-top:14px; }
+.how-rule {
+  display:flex; align-items:center; gap:10px;
+  font-size:13px; color:#94a3b8;
+}
+.rule-tag {
+  font-size:11px; font-weight:700; padding:3px 9px;
+  border-radius:999px; flex-shrink:0;
+}
+.rule-tag.ai { background:rgba(124,58,237,0.15); color:#c4b5fd; border:1px solid rgba(124,58,237,0.3); }
+.rule-tag.hu { background:rgba(0,212,255,0.1);   color:#67e8f9; border:1px solid rgba(0,212,255,0.25); }
 </style>
 </head>
 
@@ -400,6 +488,106 @@ button:disabled { opacity:0.5; cursor:not-allowed; transform:none; box-shadow:no
     <div class="breakdown" id="breakdown" style="display:none;">
       <h3>Signal Breakdown</h3>
       <div id="signalRows"></div>
+    </div>
+  </div>
+
+  <!-- HOW OUR AI WORKS -->
+  <div class="how-section">
+    <div class="how-header">
+      <div class="how-eyebrow">Under the Hood</div>
+      <h2 class="how-title">Learn How Our <span class="how-grad">AI Uses AI</span></h2>
+      <p class="how-sub">Two machine-learning models, 20+ linguistic signals, and a heuristic override layer work together every time you click Analyze.</p>
+    </div>
+
+    <div class="how-timeline">
+
+      <div class="how-step">
+        <div class="how-step-icon">①</div>
+        <div class="how-step-body">
+          <h3>Text Cleaning &amp; Tokenisation</h3>
+          <p>Your text is lowercased, URLs and punctuation are stripped, and extra whitespace is collapsed — giving both models a clean, consistent token stream to work with.</p>
+        </div>
+      </div>
+
+      <div class="how-step">
+        <div class="how-step-icon">②</div>
+        <div class="how-step-body">
+          <h3>TF-IDF Vectorisation</h3>
+          <p>The cleaned text is converted into a sparse numerical matrix using Term Frequency–Inverse Document Frequency. Up to 30,000 n-gram features (uni-, bi-, and tri-grams) capture which word combinations are statistically unusual versus the training corpus.</p>
+        </div>
+      </div>
+
+      <div class="how-step">
+        <div class="how-step-icon">③</div>
+        <div class="how-step-body">
+          <h3>20-Feature Linguistic Fingerprint</h3>
+          <p>Alongside the TF-IDF matrix, a second feature vector of hand-crafted signals is computed and stacked:</p>
+          <div class="how-chips">
+            <span class="chip">Word count</span>
+            <span class="chip">Sentence count</span>
+            <span class="chip">Avg word length</span>
+            <span class="chip">Avg sentence length</span>
+            <span class="chip">Unique word ratio</span>
+            <span class="chip">Sentence length std dev</span>
+            <span class="chip">AI vocab density</span>
+            <span class="chip">Transition word ratio</span>
+            <span class="chip">Contraction rate</span>
+            <span class="chip">First-person pronoun rate</span>
+            <span class="chip">Consecutive similar-length sentences</span>
+            <span class="chip">Exclamation / question ratio</span>
+            <span class="chip">Uppercase ratio</span>
+            <span class="chip">Punctuation count</span>
+            <span class="chip">Short sentence ratio</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="how-step">
+        <div class="how-step-icon">④</div>
+        <div class="how-step-body">
+          <h3>Dual-Model Ensemble</h3>
+          <p>Both feature vectors are fed into two independent models simultaneously — their probability outputs are averaged for a more stable verdict:</p>
+          <div class="how-model-cards">
+            <div class="how-model-card">
+              <div class="how-model-icon">⚡</div>
+              <div class="how-model-name">Calibrated SVC</div>
+              <div class="how-model-desc">A Linear Support Vector Classifier wrapped in cross-validated Platt scaling, producing true probabilities rather than raw margin scores.</div>
+            </div>
+            <div class="how-model-card">
+              <div class="how-model-icon">🌲</div>
+              <div class="how-model-name">Random Forest</div>
+              <div class="how-model-desc">300 decision trees, each trained on a random feature subset — captures non-linear interactions the SVC misses and naturally outputs calibrated probabilities.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="how-step">
+        <div class="how-step-icon">⑤</div>
+        <div class="how-step-body">
+          <h3>Heuristic Override Layer</h3>
+          <p>After the models vote, a rule-based layer fine-tunes the final probability using signals training data alone might miss:</p>
+          <div class="how-rule-list">
+            <div class="how-rule"><span class="rule-tag ai">+AI</span> 3 or more AI-vocabulary phrases detected</div>
+            <div class="how-rule"><span class="rule-tag ai">+AI</span> Sentence length std dev below 3 (very uniform structure)</div>
+            <div class="how-rule"><span class="rule-tag ai">+AI</span> Zero contractions in text over 50 words</div>
+            <div class="how-rule"><span class="rule-tag ai">+AI</span> No first-person pronouns in text over 50 words</div>
+            <div class="how-rule"><span class="rule-tag ai">+AI</span> Average sentence length above 22 words</div>
+            <div class="how-rule"><span class="rule-tag hu">+Human</span> 3 or more contractions found</div>
+            <div class="how-rule"><span class="rule-tag hu">+Human</span> 4 or more first-person pronouns found</div>
+            <div class="how-rule"><span class="rule-tag hu">+Human</span> Sentence length std dev above 8 (very bursty writing)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="how-step">
+        <div class="how-step-icon">⑥</div>
+        <div class="how-step-body">
+          <h3>Label Auto-Calibration</h3>
+          <p>When you train on your own dataset, the model doesn't assume which number means "AI". Two probe sentences — one unmistakably AI-written, one unmistakably human — are passed through the trained model after fitting. Whichever label it assigns to the AI probe becomes the AI label, making the tool work correctly regardless of how your CSV was encoded.</p>
+        </div>
+      </div>
+
     </div>
   </div>
 
